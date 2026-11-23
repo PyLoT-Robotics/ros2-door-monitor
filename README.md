@@ -1,12 +1,15 @@
 # ROS 2 Door Monitor
 
-地図上の既知のドア位置とLaserScanから、開閉・通路の遮蔽状態を監視するROS 2ノードです。
-`pylot_door_monitor` の目的を引き継ぎ、自己位置推定への依存をTFへ置き換えた
-privateの独立実装です。EMCLやPyLoTのRobotクラスは不要です。
+English · [日本語](docs/README.ja.md)
+
+A ROS 2 node that monitors a known doorway's open/closed or blocked state using
+its map position and LaserScan data. This private standalone implementation
+retains the purpose of `pylot_door_monitor` while replacing localization-specific
+coupling with TF. It requires neither EMCL nor PyLoT's Robot facade.
 
 ## Try without ROS
 
-Python 3.10+。リポジトリのルートで実行します。
+Requires Python 3.10+. Run these commands from the repository root.
 
 ```bash
 python3 -m venv .venv
@@ -16,13 +19,15 @@ python -m pytest -q
 python -m door_monitor.demo
 ```
 
-デモは `TRANSITIONING → CLOSED → TRANSITIONING → OPEN → UNKNOWN` を出します。
-`door_monitor.core` は標準ライブラリのみで、実時刻を渡して決定的にテストできます。
-ROSが無い環境ではROS結合テストだけをスキップします。
+The demo prints `TRANSITIONING → CLOSED → TRANSITIONING → OPEN → UNKNOWN`.
+`door_monitor.core` uses only the standard library and accepts explicit timestamps
+for deterministic tests. When ROS is unavailable, only the ROS integration test
+is skipped.
 
 ## ROS 2 Jazzy
 
-通常のワークスペースのsrcにリポジトリを置き、依存を準備してビルドします。
+Place the repository in a regular workspace's `src` directory, install its
+dependencies and build it:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
@@ -32,11 +37,12 @@ source install/setup.bash
 ros2 launch door_monitor door_monitor.launch.py params_file:=/absolute/path/to/door.yaml
 ```
 
-必要な入力は `sensor_msgs/LaserScan` と、`reference_frame` からスキャンの
-`header.frame_id` へのTFです。TFはスキャン時刻で取得します。地図のドア中心
-`door_x`, `door_y`（メートル）をスキャン座標へ変換するため、自己位置のyawを
-無視することはありません。基準フレーム内のドア中心はz=0、スキャンは平面を想定します。
-パラメータは起動時設定です。変更する場合はノードを再起動してください。
+Inputs are `sensor_msgs/LaserScan` and the TF needed to express the known doorway
+center from `reference_frame` in the scan's `header.frame_id`. The transform is
+looked up at the scan timestamp, accounting for robot yaw. `door_x` and `door_y`
+are in metres. The configured point has z=0 in the reference frame, and planar
+scanning is assumed. Parameters are read at startup; restart the node after
+changing them.
 
 | Parameter | Default | Meaning |
 |---|---|---|
@@ -52,23 +58,27 @@ ros2 launch door_monitor door_monitor.launch.py params_file:=/absolute/path/to/d
 | `min_valid_samples` | 3 | Minimum finite returns in cone |
 | `min_valid_fraction` | 0.6 | Minimum fraction of valid cone returns |
 
-出力は `/door_monitor/state` (`std_msgs/String`)、`/door_monitor/is_open` (`Bool`)、
-`/door_monitor/debug` (`String` JSON)、`/door_monitor/marker`（RViz用Marker）。
-`state` は `UNKNOWN`, `TRANSITIONING`, `OPEN`, `CLOSED` のいずれかです。
-`is_open=true` は安定したOPENだけです。サービス `/door_monitor/set_enabled`
-(`std_srvs/SetBool`) で有効・無効を切り替え、切替時はUNKNOWNに戻します。
+Outputs are `/door_monitor/state` (`std_msgs/String`), `/door_monitor/is_open`
+(`Bool`), `/door_monitor/debug` (`String` JSON) and `/door_monitor/marker`
+(an RViz Marker). States are `UNKNOWN`, `TRANSITIONING`, `OPEN` and `CLOSED`.
+`is_open=true` is emitted only for a stable OPEN state. Use
+`/door_monitor/set_enabled` (`std_srvs/SetBool`) to enable or disable monitoring;
+either change resets the state to UNKNOWN.
 
-ドア方向の扇形内で最も近い有効レンジが「ドア中心までの距離＋clearance」より
-遠いとOPEN、近いとCLOSEDです。人や物が遮ってもCLOSEDになります。
-ドアの形状認識や通過の安全保証は行いません。扇形の両端が見えない、無効レンジが多い、
-距離が近すぎる、TFが無い、時刻が古い場合はUNKNOWNです。+infだけのスキャンを
-OPENとは扱いません。壁まで測れない広い空間ではUNKNOWNになり得ます。
+The doorway is OPEN when the nearest valid return in its angular cone lies
+beyond the distance to its center plus `clearance_m`; otherwise it is CLOSED.
+People and other obstacles also produce CLOSED. This does not recognize door
+geometry or guarantee safe passage. Partial cone coverage, too few valid returns,
+excessive proximity, missing TF or stale timestamps produce UNKNOWN. A scan
+containing only +inf returns is not evidence of OPEN. Large spaces without a
+measurable background may therefore remain UNKNOWN.
 
-入力が途切れるとmonotonic wall clockのwatchdogでUNKNOWNへ戻ります。
-watchdogのタイマーはROSのシミュレーション時計が停止しても動きます。
-連続した観測でのみ確定し、入力断や時計リセットをまたいで安定時間を稼ぎません。
-元パッケージの自己位置再配信・initialpose制御はこのノードの責務に含めていません。
-既存の `/door_monitor/door_state` などを使う場合はremapしてください。
+A monotonic wall-clock watchdog resets the state to UNKNOWN after input stops.
+Its timer continues running when the ROS simulation clock is paused. Stable
+states require continuous observations; gaps and clock resets cannot accumulate
+dwell time. The original package's localization pose republishing and initialpose
+control are outside this node's scope. Remap topics if you use legacy names such
+as `/door_monitor/door_state`.
 
 ## Validation
 
@@ -77,10 +87,12 @@ source /opt/ros/jazzy/setup.bash
 python3 -m pytest -q
 ```
 
-単体テストに加え、独立したDDSドメインで静的TFと合成スキャンを配信し、
-実際の別プロセスのノードがCLOSED→OPEN→UNKNOWNへ遷移することを確認します。
-ロボットや実LiDARは不要です。実ドア・実センサでの性能測定は未実施です。
+Alongside unit tests, an isolated DDS domain supplies static TF and synthetic
+scans to a real node in another process, verifying CLOSED → OPEN → UNKNOWN.
+No robot or physical LiDAR is needed. Performance on real doors and sensors
+has not been measured.
 
 ## License and provenance
 
-Apache-2.0。元実装と今回の構成変更は [PROVENANCE.md](PROVENANCE.md) を参照。
+Apache-2.0. See [PROVENANCE.md](PROVENANCE.md) for the original implementation
+and extraction changes.

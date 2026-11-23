@@ -3,7 +3,7 @@
 English · [日本語](docs/README.ja.md)
 
 A ROS 2 node that monitors a known doorway's open/closed or blocked state using
-its map position and LaserScan data. This private standalone implementation
+its map position and LaserScan data. This standalone implementation
 retains the purpose of `pylot_door_monitor` while replacing localization-specific
 coupling with TF. It requires neither EMCL nor PyLoT's Robot facade.
 

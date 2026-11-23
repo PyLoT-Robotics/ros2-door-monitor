@@ -4,7 +4,7 @@
 
 地図上の既知のドア位置とLaserScanから、開閉・通路の遮蔽状態を監視するROS 2ノードです。
 `pylot_door_monitor` の目的を引き継ぎ、自己位置推定への依存をTFへ置き換えた
-privateの独立実装です。EMCLやPyLoTのRobotクラスは不要です。
+独立した実装です。EMCLやPyLoTのRobotクラスは不要です。
 
 ## ROSなしで試す
 
